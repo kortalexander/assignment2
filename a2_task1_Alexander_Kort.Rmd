@@ -1,0 +1,11 @@
+---
+title: "Task 1"
+author: "Kort Alexander"
+date: "2/2/2022"
+output: html_document
+---
+
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
