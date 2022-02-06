@@ -1,8 +1,11 @@
 ---
-title: "Task 2"
+title: "New Mexico lizard weight NLS models"
 author: "Kort Alexander"
 date: "2/5/2022"
-output: html_document
+output: 
+  html_document:
+    code_folding: hide
+    theme: spacelab
 ---
 
 # Overview
@@ -13,12 +16,13 @@ Data citation: Lightfoot, D. and W.G. Whitford. 2020. Lizard pitfall trap data f
 
 # Setup
 
-```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(tidyverse)
 library(here)
 library(broom)
+library(kableExtra)
 ```
 
 # Data input
@@ -50,13 +54,12 @@ b_guess <- guess_model_table$estimate[2]
 a_guess <- exp(guess_model_table$estimate[1]/b_guess)
 ```
 
-# NLS model creation
+# General NLS model creation and visualization
 
 ```{r}
 lizards_nls <- nls(weight ~ weight_model(a, b, SV_length),
                    data = lizards,
-                   start = list(a = a_guess, b = b_guess),
-                   trace = TRUE)
+                   start = list(a = a_guess, b = b_guess))
 
 lizards_nls_table <- tidy(lizards_nls)
 
@@ -69,4 +72,57 @@ ggplot(lizards) +
   theme_minimal()
 ```
 
-**Figure 1.** Weights of lizards predicted by NLS model based on snout to vent length.
+**Figure 1.** Weights of New Mexico lizards predicted by a general NLS model based on snout to vent length.
+
+# General NLS model results
+
+```{r}
+lizards_nls_table <- lizards_nls_table %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "<0.001"))
+
+colnames(lizards_nls_table) <- c("Term", "Estimate", "Standard error", "Statistic", "p value")
+kable(lizards_nls_table, caption = "Table 1. General NLS model results.") %>% 
+  kable_styling("striped")
+```
+
+# RMSE function
+
+```{r}
+rmse <- function(x, y) {
+  rmse_result <- (x-y)^2 %>% mean() %>% sqrt()
+  return(rmse_result)
+}
+```
+
+
+# Western whiptail NLS model creation and visualization
+
+```{r}
+cnti_lizards <- lizards %>% 
+  filter(spp == "CNTI", sex == "M")
+
+cnti_nls <- nls(weight ~ weight_model(a, b, SV_length),
+                data = cnti_lizards,
+                start = list(a = a_guess, b = b_guess))
+
+cnti_nls_table <- tidy(cnti_nls)
+
+cnti_lizards <- cnti_lizards %>% 
+  mutate(cnti_predicted_weight = weight_model(cnti_nls_table$estimate[1], cnti_nls_table$estimate[2], SV_length))
+
+ggplot(cnti_lizards) +
+  geom_point(aes(x = SV_length, y = predicted_weight, color = "General model prediction")) +
+  geom_point(aes(x = SV_length, y = cnti_predicted_weight, color = "Specific model prediction")) +
+  labs(x = "Snout to vent length (mm)", y = "Weight (g)", color = "") +
+  theme_minimal()
+
+cnti_lizards <- cnti_lizards %>% 
+  mutate(rmse_general = rmse(predicted_weight, weight)) %>% 
+  mutate(rmse_specific = rmse(cnti_predicted_weight, weight))
+
+model_errors <- cnti_lizards %>% 
+  summarize(general_mean_rmse = mean(rmse_general),
+            specific_mean_rmse = mean(rmse_specific))
+```
+
+**Figure 2.** Comparison of predicted weights of male Western whiptail lizards between general NLS model and species specific NLS model. The general model has an average root-mean-square error of `r round(model_errors$general_mean_rmse, 2)`, while the species specific model has an average root-mean_square error of `r round(model_errors$specific_mean_rmse, 2)`. The Western whiptail specific model should be used because it has lower error on average.
