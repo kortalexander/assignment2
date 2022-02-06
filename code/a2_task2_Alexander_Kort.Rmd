@@ -5,7 +5,68 @@ date: "2/5/2022"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Overview
+
+This code will use non linear least squares to estimate parameters of a length to weight model for lizard populations in New Mexico.
+
+Data citation: Lightfoot, D. and W.G. Whitford. 2020. Lizard pitfall trap data from 11 NPP study locations at the Jornada Basin LTER site, 1989-2006 ver 37. Environmental Data Initiative. https://doi.org/10.6073/pasta/4a6e258fb49c31e222ecbbcfd128967f
+
+# Setup
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(broom)
 ```
 
+# Data input
+
+```{r}
+lizards <- read_csv(here("data", "lizard.csv"))
+```
+
+# Model function
+
+```{r}
+weight_model <- function(a, b, svl) {
+  weight <- a * (svl)^b
+  return(weight)
+}
+```
+
+# Initial guesses calculation
+
+```{r}
+lizards <- lizards %>% 
+  mutate(log_length = log(SV_length)) %>% 
+  mutate(log_weight = log(weight))
+
+guess_model <- lm(log_weight ~ log_length, data = lizards)
+guess_model_table <- tidy(guess_model)
+
+b_guess <- guess_model_table$estimate[2]
+a_guess <- exp(guess_model_table$estimate[1]/b_guess)
+```
+
+# NLS model creation
+
+```{r}
+lizards_nls <- nls(weight ~ weight_model(a, b, SV_length),
+                   data = lizards,
+                   start = list(a = a_guess, b = b_guess),
+                   trace = TRUE)
+
+lizards_nls_table <- tidy(lizards_nls)
+
+lizards <- lizards %>% 
+  mutate(predicted_weight = weight_model(lizards_nls_table$estimate[1], lizards_nls_table$estimate[2], SV_length))
+
+ggplot(lizards) +
+  geom_point(aes(x = SV_length, y = predicted_weight, color = sex)) +
+  labs(x = "Snout to vent length (mm)", y = "Predicted weight (g)", color = "Sex") +
+  theme_minimal()
+```
+
+**Figure 1.** Weights of lizards predicted by NLS model based on snout to vent length.
